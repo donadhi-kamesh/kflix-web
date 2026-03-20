@@ -139,31 +139,51 @@
 
   <!-- ========== PLAYER SCREEN ========== -->
   <section id="screen-player" class="screen">
-    <div class="player-top-bar" id="playerTopBar">
-      <button class="icon-btn" onclick="exitPlayer()">
-        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      </button>
-      <span class="player-title" id="playerTitle"></span>
-      <div class="player-actions-bar">
-        <button class="icon-btn" id="nextEpisodeBtn" style="display:none;" onclick="playNextEpisode()">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-        </button>
-      </div>
-    </div>
     <div class="player-container" id="playerContainer">
       <iframe id="playerIframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" frameborder="0"></iframe>
+      <div class="touch-overlay" id="touchOverlay"></div>
     </div>
   </section>
 
-  <!-- ========== DOWNLOADS SCREEN (placeholder) ========== -->
-  <section id="screen-downloads" class="screen">
+  <!-- ========== RECOMMENDATIONS SCREEN ========== -->
+  <section id="screen-recommendations" class="screen">
     <header class="top-bar">
       <h1 class="logo">KFLIX</h1>
+      <span class="top-bar-subtitle">For You</span>
     </header>
-    <div class="screen-content downloads-empty">
-      <svg width="80" height="80" fill="none" stroke="#333" stroke-width="1.5"><path d="M40 10v40M24 36l16 16 16-16"/><rect x="10" y="56" width="60" height="12" rx="3"/></svg>
-      <h3>No Downloads</h3>
-      <p>Content you download will appear here.</p>
+    <div class="screen-content" id="recommendationsContent">
+      <div class="carousel-section">
+        <h3 class="section-title">Action & Adventure</h3>
+        <div class="carousel" id="recAction"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Comedy</h3>
+        <div class="carousel" id="recComedy"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Drama</h3>
+        <div class="carousel" id="recDrama"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Sci-Fi & Fantasy</h3>
+        <div class="carousel" id="recSciFi"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Horror</h3>
+        <div class="carousel" id="recHorror"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Romance</h3>
+        <div class="carousel" id="recRomance"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Thriller</h3>
+        <div class="carousel" id="recThriller"></div>
+      </div>
+      <div class="carousel-section">
+        <h3 class="section-title">Animation</h3>
+        <div class="carousel" id="recAnimation"></div>
+      </div>
     </div>
   </section>
 
@@ -205,9 +225,9 @@
       <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
       <span>Search</span>
     </button>
-    <button class="nav-item" data-screen="downloads" onclick="navigateTo('downloads')">
-      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/><path d="M5 20h14"/></svg>
-      <span>Downloads</span>
+    <button class="nav-item" data-screen="recommendations" onclick="navigateTo('recommendations')">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <span>For You</span>
     </button>
     <button class="nav-item" data-screen="profile" onclick="navigateTo('profile')">
       <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 12 0v1"/></svg>
