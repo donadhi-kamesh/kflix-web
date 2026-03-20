@@ -72,7 +72,18 @@ function saveContinueWatching(list) {
 }
 function addToContinueWatching(item) {
   let list = getContinueWatching();
-  list = list.filter(i => !(i.id === item.id && i.type === item.type));
+  const existingIndex = list.findIndex(i => i.id === item.id && i.type === item.type);
+  if (existingIndex >= 0) {
+    const existingObj = list[existingIndex];
+    if (item.type === 'tv' && item.episode !== existingObj.episode) {
+      item.progress = Math.floor(Math.random() * 70 + 15);
+    } else {
+      item.progress = existingObj.progress;
+    }
+    list.splice(existingIndex, 1);
+  } else {
+    item.progress = Math.floor(Math.random() * 70 + 15);
+  }
   list.unshift(item);
   saveContinueWatching(list);
 }
@@ -470,10 +481,13 @@ function playContent(id, type, title, season, episode, totalEpisodes, posterData
 
   // Set player info
   document.getElementById('playerTitle').textContent = title;
+  const btnNext = document.getElementById('btnNextEp');
   if (type === 'tv' && season && episode) {
     document.getElementById('playerSubtitle').textContent = `Season ${season} · Episode ${episode}`;
+    if (btnNext) btnNext.style.display = 'flex';
   } else {
     document.getElementById('playerSubtitle').textContent = 'Movie';
+    if (btnNext) btnNext.style.display = 'none';
   }
 
   // Navigate
@@ -487,55 +501,29 @@ function playContent(id, type, title, season, episode, totalEpisodes, posterData
     season: season || null,
     episode: episode || null,
     totalEpisodes: totalEpisodes || null,
-    progress: 5,
     timestamp: Date.now()
   });
 
   // Try fullscreen + landscape
   requestFullscreenLandscape();
-
-  // Start listening for iframe navigation (episode changes)
-  startIframeLoadListener();
 }
 
-function startIframeLoadListener() {
-  const iframe = document.getElementById('playerIframe');
-  // Remove old listener if any
-  iframe.removeEventListener('load', onIframeLoad);
-  iframe.addEventListener('load', onIframeLoad);
-}
-
-function onIframeLoad() {
-  iframeLoadCount++;
-  // Skip the first load (initial episode), detect subsequent loads as episode changes
-  if (iframeLoadCount <= 1) return;
+function playNextEpisode() {
   if (!currentPlayer || currentPlayer.type !== 'tv') return;
-
-  // Embed player navigated — assume next episode
   const newEpisode = (currentPlayer.episode || 1) + 1;
-  currentPlayer.episode = newEpisode;
-
-  // Update info bar
-  document.getElementById('playerSubtitle').textContent = `Season ${currentPlayer.season} · Episode ${newEpisode}`;
-
-  // Update continue watching
-  addToContinueWatching({
-    id: currentPlayer.id,
-    type: 'tv',
-    title: currentPlayer.title,
-    poster: playerPosterData?.poster || null,
-    backdrop: playerPosterData?.backdrop || null,
-    season: currentPlayer.season,
-    episode: newEpisode,
-    totalEpisodes: currentPlayer.totalEpisodes,
-    progress: 5,
-    timestamp: Date.now()
-  });
+  playContent(
+    currentPlayer.id,
+    'tv',
+    currentPlayer.title,
+    currentPlayer.season,
+    newEpisode,
+    currentPlayer.totalEpisodes,
+    playerPosterData
+  );
 }
 
 function exitPlayer() {
   const iframe = document.getElementById('playerIframe');
-  iframe.removeEventListener('load', onIframeLoad);
   iframe.src = '';
   iframe.style.transform = '';
   currentPlayer = null;
