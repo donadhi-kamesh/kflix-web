@@ -494,9 +494,6 @@ function playContent(id, type, title, season, episode, totalEpisodes, posterData
   // Try fullscreen + landscape
   requestFullscreenLandscape();
 
-  // Init pinch-to-stretch
-  initPinchToStretch();
-
   // Start listening for iframe navigation (episode changes)
   startIframeLoadListener();
 }
@@ -540,10 +537,15 @@ function exitPlayer() {
   const iframe = document.getElementById('playerIframe');
   iframe.removeEventListener('load', onIframeLoad);
   iframe.src = '';
-  iframe.style.transform = 'scale(1)';
+  iframe.style.transform = '';
   currentPlayer = null;
   playerPosterData = null;
   iframeLoadCount = 0;
+
+  // Reset stretch
+  isStretched = false;
+  document.getElementById('playerContainer').classList.remove('stretched');
+  document.getElementById('btnStretch').classList.remove('active');
 
   // Exit fullscreen if still in it
   if (document.fullscreenElement) {
@@ -598,87 +600,14 @@ window.addEventListener('popstate', (e) => {
 
 history.replaceState({ screen: 'home' }, '', '');
 
-// ── PINCH-TO-STRETCH ──
-let pinchInitialized = false;
-function initPinchToStretch() {
-  if (pinchInitialized) return;
-  pinchInitialized = true;
-
-  const overlay = document.getElementById('touchOverlay');
-  const iframe = document.getElementById('playerIframe');
-  let initialDistance = 0;
-  let currentScale = 1;
-  let startScale = 1;
-  let isPinching = false;
-  let tapTimeout = null;
-
-  overlay.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      e.stopPropagation();
-      isPinching = true;
-      initialDistance = getDistance(e.touches[0], e.touches[1]);
-      startScale = currentScale;
-    }
-  }, { passive: false });
-
-  overlay.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && isPinching) {
-      e.preventDefault();
-      e.stopPropagation();
-      const dist = getDistance(e.touches[0], e.touches[1]);
-      const scaleChange = dist / initialDistance;
-      currentScale = Math.min(Math.max(startScale * scaleChange, 1), 3);
-      iframe.style.transform = `scale(${currentScale})`;
-    }
-  }, { passive: false });
-
-  overlay.addEventListener('touchend', (e) => {
-    if (isPinching) {
-      isPinching = false;
-      if (currentScale < 1.1) {
-        currentScale = 1;
-        iframe.style.transform = 'scale(1)';
-      }
-      return;
-    }
-
-    // Forward single taps to iframe by briefly hiding overlay
-    if (e.touches.length === 0 && !isPinching) {
-      const touch = e.changedTouches[0];
-      if (!touch) return;
-
-      // Double-tap detection for zoom toggle
-      const now = Date.now();
-      if (tapTimeout) {
-        clearTimeout(tapTimeout);
-        tapTimeout = null;
-        // Double tap — toggle stretch
-        currentScale = currentScale > 1 ? 1 : 1.5;
-        iframe.style.transform = `scale(${currentScale})`;
-        iframe.style.transition = 'transform 0.3s ease';
-        setTimeout(() => { iframe.style.transition = ''; }, 300);
-        return;
-      }
-
-      tapTimeout = setTimeout(() => {
-        tapTimeout = null;
-        // Single tap — forward to iframe
-        overlay.style.pointerEvents = 'none';
-        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        if (el) el.click();
-        requestAnimationFrame(() => {
-          overlay.style.pointerEvents = '';
-        });
-      }, 250);
-    }
-  });
-}
-
-function getDistance(touch1, touch2) {
-  const dx = touch1.clientX - touch2.clientX;
-  const dy = touch1.clientY - touch2.clientY;
-  return Math.sqrt(dx * dx + dy * dy);
+// ── STRETCH TO FILL ──
+let isStretched = false;
+function toggleStretch() {
+  const container = document.getElementById('playerContainer');
+  const btn = document.getElementById('btnStretch');
+  isStretched = !isStretched;
+  container.classList.toggle('stretched', isStretched);
+  btn.classList.toggle('active', isStretched);
 }
 
 // ── RECOMMENDATIONS ──

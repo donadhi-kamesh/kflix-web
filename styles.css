@@ -633,12 +633,14 @@ body {
   border: none;
   transform-origin: center center;
 }
-.touch-overlay {
+/* Stretch mode: force iframe to cover container, cropping sides */
+.player-container.stretched #playerIframe {
+  width: 177vh;
+  height: 100%;
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 5;
-  background: transparent;
-  touch-action: none;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 /* Player info bar (shown when not fullscreen) */
@@ -676,6 +678,24 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+.btn-stretch {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: var(--white);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), color var(--transition);
+}
+.btn-stretch:active { background: rgba(255,255,255,0.2); }
+.btn-stretch.active {
+  background: rgba(229,9,20,0.3);
+  color: var(--red);
 }
 .btn-fullscreen {
   width: 42px;

@@ -172,7 +172,6 @@
     <div class="player-frame">
       <div class="player-container" id="playerContainer">
         <iframe id="playerIframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" frameborder="0"></iframe>
-        <div class="touch-overlay" id="touchOverlay"></div>
       </div>
     </div>
     <div class="player-info-bar" id="playerInfoBar">
@@ -181,6 +180,9 @@
         <p class="player-info-subtitle" id="playerSubtitle"></p>
       </div>
       <div class="player-info-actions">
+        <button class="btn-stretch" id="btnStretch" onclick="toggleStretch()" title="Stretch to fill">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+        </button>
         <button class="btn-fullscreen" id="btnFullscreen" onclick="requestFullscreenLandscape()">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
         </button>
