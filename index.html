@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>KFLIX – Watch Movies & TV Shows</title>
   <meta name="description" content="KFLIX – Stream the latest movies and TV shows in HD. Browse trending, popular, and top-rated content.">
+  <meta name="theme-color" content="#e50914">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -64,6 +70,30 @@
       <div class="carousel-section">
         <h3 class="section-title">Top Rated</h3>
         <div class="carousel" id="topRatedCarousel"></div>
+      </div>
+
+      <!-- Now Playing -->
+      <div class="carousel-section">
+        <h3 class="section-title">Now Playing in Theatres</h3>
+        <div class="carousel" id="nowPlayingCarousel"></div>
+      </div>
+
+      <!-- Upcoming -->
+      <div class="carousel-section">
+        <h3 class="section-title">Upcoming</h3>
+        <div class="carousel" id="upcomingCarousel"></div>
+      </div>
+
+      <!-- Popular TV -->
+      <div class="carousel-section">
+        <h3 class="section-title">Popular TV Shows</h3>
+        <div class="carousel" id="popularTvCarousel"></div>
+      </div>
+
+      <!-- Top Rated TV -->
+      <div class="carousel-section">
+        <h3 class="section-title">Top Rated TV Shows</h3>
+        <div class="carousel" id="topRatedTvCarousel"></div>
       </div>
 
       <!-- My List / Favorites -->
@@ -139,9 +169,24 @@
 
   <!-- ========== PLAYER SCREEN ========== -->
   <section id="screen-player" class="screen">
-    <div class="player-container" id="playerContainer">
-      <iframe id="playerIframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" frameborder="0"></iframe>
-      <div class="touch-overlay" id="touchOverlay"></div>
+    <div class="player-frame">
+      <div class="player-container" id="playerContainer">
+        <iframe id="playerIframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture" frameborder="0"></iframe>
+      </div>
+    </div>
+    <div class="player-info-bar" id="playerInfoBar">
+      <div class="player-info-text">
+        <h3 class="player-info-title" id="playerTitle">Now Playing</h3>
+        <p class="player-info-subtitle" id="playerSubtitle"></p>
+      </div>
+      <div class="player-info-actions">
+        <button class="btn-fullscreen" id="btnFullscreen" onclick="requestFullscreenLandscape()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        </button>
+        <button class="btn-close-player" id="btnClosePlayer" onclick="exitPlayer()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -236,5 +281,10 @@
   </nav>
 
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>

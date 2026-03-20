@@ -253,7 +253,7 @@ body {
 /* Continue Watching Card */
 .cw-card {
   flex: 0 0 auto;
-  width: 160px;
+  width: 200px;
   cursor: pointer;
   border-radius: var(--radius);
   overflow: hidden;
@@ -261,17 +261,45 @@ body {
   transition: transform var(--transition);
 }
 .cw-card:active { transform: scale(0.95); }
+.cw-poster-wrap {
+  position: relative;
+  width: 200px;
+  height: 112px;
+}
 .cw-poster {
-  width: 160px;
-  height: 90px;
+  width: 200px;
+  height: 112px;
   object-fit: cover;
   display: block;
 }
+.cw-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  background: rgba(0,0,0,0.6);
+  border: 2px solid rgba(255,255,255,0.8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition), background var(--transition);
+}
+.cw-card:hover .cw-play-overlay,
+.cw-card:active .cw-play-overlay {
+  background: rgba(229,9,20,0.85);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+.cw-play-overlay svg {
+  margin-left: 2px;
+}
 .cw-info {
-  padding: 6px 8px;
+  padding: 8px 10px;
 }
 .cw-title-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -280,18 +308,20 @@ body {
 .cw-ep {
   font-size: 10px;
   color: var(--text-muted);
+  margin-top: 2px;
 }
 .cw-progress {
-  height: 3px;
+  height: 4px;
   background: #333;
   border-radius: 2px;
-  margin-top: 4px;
+  margin-top: 6px;
   overflow: hidden;
 }
 .cw-progress-bar {
   height: 100%;
   background: var(--red);
   border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 /* ========== DETAIL SCREEN ========== */
@@ -491,12 +521,6 @@ body {
   font-weight: 700;
   margin-bottom: 2px;
 }
-.episode-name {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: var(--white);
-}
 .episode-desc {
   font-size: 12px;
   color: var(--text-muted);
@@ -506,15 +530,6 @@ body {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-.episode-download {
-  flex: 0 0 auto;
-  align-self: center;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  cursor: pointer;
-  padding: 4px;
 }
 
 /* ========== SEARCH SCREEN ========== */
@@ -587,13 +602,27 @@ body {
 #screen-player {
   background: #000;
   padding-bottom: 0;
+  display: none;
+  flex-direction: column;
+}
+#screen-player.active {
+  display: flex;
+}
+.player-frame {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #000;
+  flex: 0 0 auto;
+}
+#screen-player:fullscreen .player-frame,
+#screen-player:-webkit-full-screen .player-frame {
+  aspect-ratio: unset;
+  flex: 1;
+  height: 100%;
 }
 .player-container {
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
   touch-action: none;
   position: relative;
@@ -604,15 +633,71 @@ body {
   border: none;
   transform-origin: center center;
 }
-.touch-overlay {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  z-index: 5;
-  pointer-events: none;
+
+/* Player info bar (shown when not fullscreen) */
+.player-info-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  gap: 12px;
+  background: var(--surface);
+  border-top: 1px solid #222;
 }
-.touch-overlay.active {
-  pointer-events: auto;
+#screen-player:fullscreen .player-info-bar,
+#screen-player:-webkit-full-screen .player-info-bar {
+  display: none;
 }
+.player-info-text {
+  flex: 1;
+  min-width: 0;
+}
+.player-info-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-info-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.player-info-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-fullscreen {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: var(--white);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+}
+.btn-fullscreen:active { background: rgba(255,255,255,0.2); }
+.btn-close-player {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(229,9,20,0.2);
+  color: var(--red);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition);
+}
+.btn-close-player:active { background: rgba(229,9,20,0.4); }
 
 /* ========== RECOMMENDATIONS ========== */
 .top-bar-subtitle {
@@ -737,6 +822,8 @@ body {
   .card { width: 160px; }
   .card-poster { width: 160px; height: 240px; }
   .search-results { grid-template-columns: repeat(4, 1fr); }
+  .cw-card { width: 240px; }
+  .cw-poster-wrap, .cw-poster { width: 240px; height: 135px; }
 }
 @media (min-width: 1024px) {
   .search-results { grid-template-columns: repeat(6, 1fr); }

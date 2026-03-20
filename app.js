@@ -11,11 +11,11 @@ const VIDFAST_BASE = 'https://vidfast.pro';
 // ── STATE ──
 let currentScreen = 'home';
 let screenHistory = ['home'];
-let currentDetail = null; // { id, type, data, seasons }
-let currentPlayer = null; // { id, type, title, season, episode, totalEpisodes }
-let playerHistoryPushed = false;
+let currentDetail = null;
+let currentPlayer = null;
 let iframePoller = null;
 let recommendationsLoaded = false;
+let isPlayerFullscreen = false;
 
 // ── TMDB FETCH HELPER ──
 async function tmdbFetch(endpoint, params = {}) {
@@ -50,6 +50,11 @@ function navigateTo(screen, addToHistory = true) {
   // Scroll to top
   const el = document.getElementById(`screen-${screen}`);
   if (el) el.scrollTop = 0;
+
+  // Lazy-load recommendations
+  if (screen === 'recommendations') {
+    initRecommendations();
+  }
 }
 
 function goBack() {
@@ -89,7 +94,7 @@ function toggleMyList(item) {
     list.unshift(item);
   }
   saveMyList(list);
-  return idx < 0; // true if added
+  return idx < 0;
 }
 function isInMyList(id, type) {
   return getMyList().some(i => i.id === id && i.type === type);
@@ -109,10 +114,14 @@ function clearMyList() {
 // ── HOME SCREEN ──
 async function initHome() {
   try {
-    const [trending, popular, topRated] = await Promise.all([
+    const [trending, popular, topRated, nowPlaying, upcoming, popularTv, topRatedTv] = await Promise.all([
       tmdbFetch('/trending/all/week'),
       tmdbFetch('/movie/popular'),
-      tmdbFetch('/movie/top_rated')
+      tmdbFetch('/movie/top_rated'),
+      tmdbFetch('/movie/now_playing'),
+      tmdbFetch('/movie/upcoming'),
+      tmdbFetch('/tv/popular'),
+      tmdbFetch('/tv/top_rated')
     ]);
 
     // Hero
@@ -123,6 +132,10 @@ async function initHome() {
     renderCarousel('popularCarousel', popular.results);
     renderCarousel('trendingCarousel', trending.results);
     renderCarousel('topRatedCarousel', topRated.results);
+    renderCarousel('nowPlayingCarousel', nowPlaying.results);
+    renderCarousel('upcomingCarousel', upcoming.results);
+    renderCarousel('popularTvCarousel', popularTv.results, 'tv');
+    renderCarousel('topRatedTvCarousel', topRatedTv.results, 'tv');
 
     // Continue Watching
     renderContinueWatching();
@@ -147,7 +160,6 @@ function renderHero(item) {
   const rating = item.vote_average ? item.vote_average.toFixed(1) : '';
   heroMeta.innerHTML = `<span>${year}</span><span>${type}</span>${rating ? `<span>⭐ ${rating}</span>` : ''}`;
 
-  // Play button
   document.getElementById('heroPlay').onclick = () => {
     const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
     if (mediaType === 'tv') {
@@ -157,7 +169,6 @@ function renderHero(item) {
     }
   };
 
-  // My List button
   document.getElementById('heroMyList').onclick = () => {
     const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
     const added = toggleMyList({
@@ -173,12 +184,13 @@ function renderHero(item) {
   };
 }
 
-function renderCarousel(containerId, items) {
+function renderCarousel(containerId, items, forceType) {
   const container = document.getElementById(containerId);
+  if (!container) return;
   container.innerHTML = items
     .filter(i => i.poster_path)
     .map(item => {
-      const mediaType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+      const mediaType = forceType || item.media_type || (item.first_air_date ? 'tv' : 'movie');
       return `<div class="card fade-in" onclick="openDetail(${item.id}, '${mediaType}')">
         <img class="card-poster" src="${IMG_BASE}w342${item.poster_path}" alt="${item.title || item.name}" loading="lazy">
       </div>`;
@@ -199,7 +211,12 @@ function renderContinueWatching() {
     const backdrop = item.backdrop ? `${IMG_BASE}w500${item.backdrop}` : (item.poster ? `${IMG_BASE}w342${item.poster}` : '');
     const epLabel = item.type === 'tv' && item.season && item.episode ? `S${item.season} E${item.episode}` : '';
     return `<div class="cw-card fade-in" onclick="resumeWatching(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-      <img class="cw-poster" src="${backdrop}" alt="${item.title}" loading="lazy">
+      <div class="cw-poster-wrap">
+        <img class="cw-poster" src="${backdrop}" alt="${item.title}" loading="lazy">
+        <div class="cw-play-overlay">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+      </div>
       <div class="cw-info">
         <div class="cw-title-text">${item.title}</div>
         ${epLabel ? `<div class="cw-ep">${epLabel}</div>` : ''}
@@ -236,8 +253,6 @@ function resumeWatching(item) {
 // ── DETAIL SCREEN ──
 async function openDetail(id, type) {
   navigateTo('detail');
-  const detailContent = document.getElementById('detailContent');
-  // Show skeleton
   document.getElementById('detailBackdrop').style.backgroundImage = '';
   document.getElementById('detailTitle').textContent = '';
   document.getElementById('detailOverview').textContent = '';
@@ -255,18 +270,13 @@ async function openDetail(id, type) {
 
     currentDetail = { id, type, data };
 
-    // Backdrop
     if (data.backdrop_path) {
       document.getElementById('detailBackdrop').style.backgroundImage = `url(${IMG_BASE}w1280${data.backdrop_path})`;
     }
 
-    // Type badge
     document.getElementById('detailTypeBadge').textContent = type === 'tv' ? 'ORIGINAL SERIES' : 'MOVIE';
-
-    // Title
     document.getElementById('detailTitle').textContent = data.title || data.name;
 
-    // Meta
     const year = (data.release_date || data.first_air_date || '').substring(0, 4);
     const match = Math.floor(Math.random() * 10 + 90);
     let metaHTML = `<span class="match-badge">${match}% Match</span>`;
@@ -284,22 +294,18 @@ async function openDetail(id, type) {
     metaHTML += `<span class="meta-tag">4K Ultra HD</span>`;
     document.getElementById('detailMeta').innerHTML = metaHTML;
 
-    // Overview
     document.getElementById('detailOverview').textContent = data.overview || 'No description available.';
 
-    // Cast
     if (credits.cast && credits.cast.length > 0) {
       const castNames = credits.cast.slice(0, 4).map(c => c.name.toUpperCase()).join(', ');
       document.getElementById('detailCast').innerHTML = `<strong>Starring: </strong>${castNames}`;
     }
 
-    // Genres
     if (data.genres && data.genres.length > 0) {
       document.getElementById('detailGenres').innerHTML = data.genres
         .map(g => `<span class="genre-chip">${g.name}</span>`).join('');
     }
 
-    // Play button
     document.getElementById('detailPlayBtn').onclick = () => {
       if (type === 'tv') {
         playContent(id, 'tv', data.name, 1, 1);
@@ -308,20 +314,16 @@ async function openDetail(id, type) {
       }
     };
 
-    // Add-to-list button
     updateDetailListButton(id, type, data);
 
-    // Episodes for TV
     if (type === 'tv' && data.number_of_seasons > 0) {
       currentDetail.seasons = data.seasons || [];
       const dropdown = document.getElementById('seasonDropdown');
-      // Filter out specials (season 0) optionally
       const realSeasons = (data.seasons || []).filter(s => s.season_number > 0);
       dropdown.innerHTML = realSeasons.map(s =>
         `<option value="${s.season_number}">Season ${s.season_number} (${s.episode_count} Episodes)</option>`
       ).join('');
       document.getElementById('episodesSection').style.display = '';
-      // Load first season
       loadSeason(realSeasons[0]?.season_number || 1);
     }
   } catch (err) {
@@ -356,7 +358,7 @@ async function loadSeason(seasonNumber) {
   try {
     const data = await tmdbFetch(`/tv/${currentDetail.id}/season/${seasonNumber}`);
     const episodes = data.episodes || [];
-    list.innerHTML = episodes.map((ep, idx) => {
+    list.innerHTML = episodes.map(ep => {
       const thumb = ep.still_path ? `${IMG_BASE}w300${ep.still_path}` : '';
       const runtime = ep.runtime ? `${ep.runtime}m` : '';
       return `<div class="episode-item fade-in" onclick="playContent(${currentDetail.id}, 'tv', '${(currentDetail.data.name || '').replace(/'/g, "\\'")}', ${seasonNumber}, ${ep.episode_number}, ${episodes.length})">
@@ -368,9 +370,6 @@ async function loadSeason(seasonNumber) {
           <div class="episode-number">${ep.episode_number}. ${ep.name || `Episode ${ep.episode_number}`}</div>
           <div class="episode-desc">${ep.overview || ''}</div>
         </div>
-        <button class="episode-download">
-          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-        </button>
       </div>`;
     }).join('');
   } catch (err) {
@@ -445,14 +444,16 @@ function playContent(id, type, title, season, episode, totalEpisodes) {
   const iframe = document.getElementById('playerIframe');
   iframe.src = embedUrl;
 
+  // Set player info
+  document.getElementById('playerTitle').textContent = title;
+  if (type === 'tv' && season && episode) {
+    document.getElementById('playerSubtitle').textContent = `Season ${season} · Episode ${episode}`;
+  } else {
+    document.getElementById('playerSubtitle').textContent = 'Movie';
+  }
+
   // Navigate
   navigateTo('player');
-
-  // Push history state for Android back button
-  if (!playerHistoryPushed) {
-    history.pushState({ screen: 'player' }, '', '');
-    playerHistoryPushed = true;
-  }
 
   // Save to continue watching
   addToContinueWatching({
@@ -472,7 +473,7 @@ function playContent(id, type, title, season, episode, totalEpisodes) {
   // Init pinch-to-stretch
   initPinchToStretch();
 
-  // Start polling iframe for episode changes (embed player's own next button)
+  // Start polling iframe for episode changes
   startIframePolling();
 }
 
@@ -482,19 +483,17 @@ function startIframePolling() {
     if (!currentPlayer || currentPlayer.type !== 'tv') return;
     try {
       const iframe = document.getElementById('playerIframe');
-      // Cross-origin: we can't read iframe.contentWindow.location
-      // Instead, use the iframe's src attribute if the embed navigates via src changes
-      // For vidfast.pro, the embed player changes episodes internally via its own navigation
-      // We detect this by checking the iframe src periodically
       const currentSrc = iframe.src || '';
       const match = currentSrc.match(/\/tv\/(\d+)\/(\d+)\/(\d+)/);
       if (match) {
         const newSeason = parseInt(match[2]);
         const newEpisode = parseInt(match[3]);
         if (newSeason !== currentPlayer.season || newEpisode !== currentPlayer.episode) {
-          // Episode changed via embed player
           currentPlayer.season = newSeason;
           currentPlayer.episode = newEpisode;
+
+          // Update info bar
+          document.getElementById('playerSubtitle').textContent = `Season ${newSeason} · Episode ${newEpisode}`;
 
           // Update continue watching
           addToContinueWatching({
@@ -512,7 +511,7 @@ function startIframePolling() {
         }
       }
     } catch (e) {
-      // Cross-origin errors are expected, ignore
+      // Cross-origin errors are expected
     }
   }, 2000);
 }
@@ -531,9 +530,8 @@ function exitPlayer() {
   iframe.src = '';
   iframe.style.transform = 'scale(1)';
   currentPlayer = null;
-  playerHistoryPushed = false;
 
-  // Exit fullscreen
+  // Exit fullscreen if still in it
   if (document.fullscreenElement) {
     document.exitFullscreen().catch(() => {});
   }
@@ -543,27 +541,52 @@ function exitPlayer() {
   renderContinueWatching();
 }
 
-// ── ANDROID BACK BUTTON (popstate) ──
-window.addEventListener('popstate', (e) => {
-  if (currentScreen === 'player') {
-    e.preventDefault();
-    exitPlayer();
-  }
-});
-
 // ── FULLSCREEN + LANDSCAPE ──
 function requestFullscreenLandscape() {
   const container = document.getElementById('screen-player');
   try {
     if (container.requestFullscreen) {
       container.requestFullscreen().then(() => {
+        isPlayerFullscreen = true;
         try { screen.orientation.lock('landscape').catch(() => {}); } catch {}
       }).catch(() => {});
     } else if (container.webkitRequestFullscreen) {
       container.webkitRequestFullscreen();
+      isPlayerFullscreen = true;
     }
   } catch {}
 }
+
+// Listen for fullscreen changes
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && currentScreen === 'player') {
+    isPlayerFullscreen = false;
+    try { screen.orientation.unlock(); } catch {}
+  }
+});
+
+// ── ANDROID BACK BUTTON ──
+window.addEventListener('popstate', (e) => {
+  if (currentScreen === 'player') {
+    e.preventDefault();
+    if (isPlayerFullscreen || document.fullscreenElement) {
+      // First back press: just exit fullscreen, stay on player screen
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      isPlayerFullscreen = false;
+      try { screen.orientation.unlock(); } catch {}
+      // Push state again so next back press can close the player
+      history.pushState({ screen: 'player' }, '', '');
+    } else {
+      // Second back press: close the player
+      exitPlayer();
+    }
+  }
+});
+
+// Push initial state
+history.replaceState({ screen: 'home' }, '', '');
 
 // ── PINCH-TO-STRETCH ──
 let pinchInitialized = false;
@@ -571,24 +594,22 @@ function initPinchToStretch() {
   if (pinchInitialized) return;
   pinchInitialized = true;
 
-  const overlay = document.getElementById('touchOverlay');
+  const container = document.getElementById('playerContainer');
   const iframe = document.getElementById('playerIframe');
   let initialDistance = 0;
   let currentScale = 1;
   let startScale = 1;
-  let isPinching = false;
 
-  overlay.addEventListener('touchstart', (e) => {
+  container.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       e.preventDefault();
-      isPinching = true;
       initialDistance = getDistance(e.touches[0], e.touches[1]);
       startScale = currentScale;
     }
   }, { passive: false });
 
-  overlay.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && isPinching) {
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
       e.preventDefault();
       const dist = getDistance(e.touches[0], e.touches[1]);
       const scaleChange = dist / initialDistance;
@@ -597,23 +618,19 @@ function initPinchToStretch() {
     }
   }, { passive: false });
 
-  overlay.addEventListener('touchend', (e) => {
+  container.addEventListener('touchend', (e) => {
     if (e.touches.length < 2) {
-      isPinching = false;
-      // Snap back if close to 1
       if (currentScale < 1.1) {
         currentScale = 1;
         iframe.style.transform = 'scale(1)';
       }
-      // Deactivate overlay after pinch so iframe gets normal touches
-      overlay.classList.remove('active');
     }
   });
 
-  // Double tap to toggle stretch
+  // Double-tap to toggle stretch
   let lastTap = 0;
-  overlay.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0 && !isPinching) {
+  container.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) {
       const now = Date.now();
       if (now - lastTap < 300) {
         currentScale = currentScale > 1 ? 1 : 1.5;
@@ -624,14 +641,6 @@ function initPinchToStretch() {
       lastTap = now;
     }
   });
-
-  // Detect two-finger touch start on the container to activate overlay
-  const container = document.getElementById('playerContainer');
-  container.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      overlay.classList.add('active');
-    }
-  }, { passive: true });
 }
 
 function getDistance(touch1, touch2) {
@@ -646,14 +655,14 @@ async function initRecommendations() {
   recommendationsLoaded = true;
 
   const genres = [
-    { id: 28, carouselId: 'recAction' },    // Action
-    { id: 35, carouselId: 'recComedy' },     // Comedy
-    { id: 18, carouselId: 'recDrama' },      // Drama
-    { id: 878, carouselId: 'recSciFi' },     // Sci-Fi
-    { id: 27, carouselId: 'recHorror' },     // Horror
-    { id: 10749, carouselId: 'recRomance' }, // Romance
-    { id: 53, carouselId: 'recThriller' },   // Thriller
-    { id: 16, carouselId: 'recAnimation' },  // Animation
+    { id: 28, carouselId: 'recAction' },
+    { id: 35, carouselId: 'recComedy' },
+    { id: 18, carouselId: 'recDrama' },
+    { id: 878, carouselId: 'recSciFi' },
+    { id: 27, carouselId: 'recHorror' },
+    { id: 10749, carouselId: 'recRomance' },
+    { id: 53, carouselId: 'recThriller' },
+    { id: 16, carouselId: 'recAnimation' },
   ];
 
   try {
@@ -674,12 +683,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initHome();
   initSearch();
 
-  // Lazy-load recommendations when navigating to that tab
-  const origNavigate = navigateTo;
-  navigateTo = function(screen, addToHistory) {
-    origNavigate(screen, addToHistory);
-    if (screen === 'recommendations') {
-      initRecommendations();
+  // Push history state for player back button handling
+  window.addEventListener('beforeunload', () => {
+    if (currentScreen === 'player') {
+      exitPlayer();
     }
-  };
+  });
 });
