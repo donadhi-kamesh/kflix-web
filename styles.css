@@ -633,6 +633,13 @@ body {
   border: none;
   transform-origin: center center;
 }
+.touch-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 5;
+  background: transparent;
+  touch-action: none;
+}
 
 /* Player info bar (shown when not fullscreen) */
 .player-info-bar {

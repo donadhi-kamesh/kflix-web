@@ -13,7 +13,6 @@ let currentScreen = 'home';
 let screenHistory = ['home'];
 let currentDetail = null;
 let currentPlayer = null;
-let iframePoller = null;
 let recommendationsLoaded = false;
 let isPlayerFullscreen = false;
 
@@ -165,7 +164,10 @@ function renderHero(item) {
     if (mediaType === 'tv') {
       openDetail(item.id, 'tv');
     } else {
-      playContent(item.id, 'movie', item.title || item.name);
+      playContent(item.id, 'movie', item.title || item.name, null, null, null, {
+        poster: item.poster_path,
+        backdrop: item.backdrop_path
+      });
     }
   };
 
@@ -208,11 +210,17 @@ function renderContinueWatching() {
   }
   section.style.display = '';
   carousel.innerHTML = list.map(item => {
-    const backdrop = item.backdrop ? `${IMG_BASE}w500${item.backdrop}` : (item.poster ? `${IMG_BASE}w342${item.poster}` : '');
-    const epLabel = item.type === 'tv' && item.season && item.episode ? `S${item.season} E${item.episode}` : '';
+    // Use poster as fallback when backdrop is missing
+    const imgSrc = item.backdrop
+      ? `${IMG_BASE}w500${item.backdrop}`
+      : (item.poster ? `${IMG_BASE}w342${item.poster}` : '');
+    const epLabel = item.type === 'tv' && item.season && item.episode
+      ? `S${item.season} · E${item.episode}`
+      : (item.type === 'movie' ? 'Movie' : '');
+    const progress = item.progress || 5;
     return `<div class="cw-card fade-in" onclick="resumeWatching(${JSON.stringify(item).replace(/"/g, '&quot;')})">
       <div class="cw-poster-wrap">
-        <img class="cw-poster" src="${backdrop}" alt="${item.title}" loading="lazy">
+        ${imgSrc ? `<img class="cw-poster" src="${imgSrc}" alt="${item.title}" loading="lazy">` : '<div class="cw-poster skeleton"></div>'}
         <div class="cw-play-overlay">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
         </div>
@@ -220,7 +228,7 @@ function renderContinueWatching() {
       <div class="cw-info">
         <div class="cw-title-text">${item.title}</div>
         ${epLabel ? `<div class="cw-ep">${epLabel}</div>` : ''}
-        <div class="cw-progress"><div class="cw-progress-bar" style="width:${item.progress || 30}%"></div></div>
+        <div class="cw-progress"><div class="cw-progress-bar" style="width:${progress}%"></div></div>
       </div>
     </div>`;
   }).join('');
@@ -243,10 +251,11 @@ function renderMyList() {
 }
 
 function resumeWatching(item) {
+  const posterData = { poster: item.poster, backdrop: item.backdrop };
   if (item.type === 'tv') {
-    playContent(item.id, 'tv', item.title, item.season || 1, item.episode || 1, item.totalEpisodes);
+    playContent(item.id, 'tv', item.title, item.season || 1, item.episode || 1, item.totalEpisodes, posterData);
   } else {
-    playContent(item.id, 'movie', item.title);
+    playContent(item.id, 'movie', item.title, null, null, null, posterData);
   }
 }
 
@@ -429,8 +438,22 @@ async function performSearch(query) {
 }
 
 // ── PLAYER ──
-function playContent(id, type, title, season, episode, totalEpisodes) {
+let playerPosterData = null; // { poster, backdrop }
+let iframeLoadCount = 0;
+
+function playContent(id, type, title, season, episode, totalEpisodes, posterData) {
   currentPlayer = { id, type, title, season: season || null, episode: episode || null, totalEpisodes: totalEpisodes || null };
+
+  // Store poster data from whichever source provides it
+  if (posterData && (posterData.poster || posterData.backdrop)) {
+    playerPosterData = posterData;
+  } else if (currentDetail?.data) {
+    playerPosterData = {
+      poster: currentDetail.data.poster_path,
+      backdrop: currentDetail.data.backdrop_path
+    };
+  }
+  // else keep existing playerPosterData
 
   // Build embed URL
   let embedUrl;
@@ -442,6 +465,7 @@ function playContent(id, type, title, season, episode, totalEpisodes) {
 
   // Load iframe
   const iframe = document.getElementById('playerIframe');
+  iframeLoadCount = 0; // Reset load counter
   iframe.src = embedUrl;
 
   // Set player info
@@ -458,12 +482,12 @@ function playContent(id, type, title, season, episode, totalEpisodes) {
   // Save to continue watching
   addToContinueWatching({
     id, type, title,
-    poster: currentDetail?.data?.poster_path || null,
-    backdrop: currentDetail?.data?.backdrop_path || null,
+    poster: playerPosterData?.poster || null,
+    backdrop: playerPosterData?.backdrop || null,
     season: season || null,
     episode: episode || null,
     totalEpisodes: totalEpisodes || null,
-    progress: Math.floor(Math.random() * 40 + 10),
+    progress: 5,
     timestamp: Date.now()
   });
 
@@ -473,63 +497,53 @@ function playContent(id, type, title, season, episode, totalEpisodes) {
   // Init pinch-to-stretch
   initPinchToStretch();
 
-  // Start polling iframe for episode changes
-  startIframePolling();
+  // Start listening for iframe navigation (episode changes)
+  startIframeLoadListener();
 }
 
-function startIframePolling() {
-  if (iframePoller) clearInterval(iframePoller);
-  iframePoller = setInterval(() => {
-    if (!currentPlayer || currentPlayer.type !== 'tv') return;
-    try {
-      const iframe = document.getElementById('playerIframe');
-      const currentSrc = iframe.src || '';
-      const match = currentSrc.match(/\/tv\/(\d+)\/(\d+)\/(\d+)/);
-      if (match) {
-        const newSeason = parseInt(match[2]);
-        const newEpisode = parseInt(match[3]);
-        if (newSeason !== currentPlayer.season || newEpisode !== currentPlayer.episode) {
-          currentPlayer.season = newSeason;
-          currentPlayer.episode = newEpisode;
-
-          // Update info bar
-          document.getElementById('playerSubtitle').textContent = `Season ${newSeason} · Episode ${newEpisode}`;
-
-          // Update continue watching
-          addToContinueWatching({
-            id: currentPlayer.id,
-            type: 'tv',
-            title: currentPlayer.title,
-            poster: currentDetail?.data?.poster_path || null,
-            backdrop: currentDetail?.data?.backdrop_path || null,
-            season: newSeason,
-            episode: newEpisode,
-            totalEpisodes: currentPlayer.totalEpisodes,
-            progress: Math.floor(Math.random() * 20 + 5),
-            timestamp: Date.now()
-          });
-        }
-      }
-    } catch (e) {
-      // Cross-origin errors are expected
-    }
-  }, 2000);
+function startIframeLoadListener() {
+  const iframe = document.getElementById('playerIframe');
+  // Remove old listener if any
+  iframe.removeEventListener('load', onIframeLoad);
+  iframe.addEventListener('load', onIframeLoad);
 }
 
-function stopIframePolling() {
-  if (iframePoller) {
-    clearInterval(iframePoller);
-    iframePoller = null;
-  }
+function onIframeLoad() {
+  iframeLoadCount++;
+  // Skip the first load (initial episode), detect subsequent loads as episode changes
+  if (iframeLoadCount <= 1) return;
+  if (!currentPlayer || currentPlayer.type !== 'tv') return;
+
+  // Embed player navigated — assume next episode
+  const newEpisode = (currentPlayer.episode || 1) + 1;
+  currentPlayer.episode = newEpisode;
+
+  // Update info bar
+  document.getElementById('playerSubtitle').textContent = `Season ${currentPlayer.season} · Episode ${newEpisode}`;
+
+  // Update continue watching
+  addToContinueWatching({
+    id: currentPlayer.id,
+    type: 'tv',
+    title: currentPlayer.title,
+    poster: playerPosterData?.poster || null,
+    backdrop: playerPosterData?.backdrop || null,
+    season: currentPlayer.season,
+    episode: newEpisode,
+    totalEpisodes: currentPlayer.totalEpisodes,
+    progress: 5,
+    timestamp: Date.now()
+  });
 }
 
 function exitPlayer() {
-  stopIframePolling();
-
   const iframe = document.getElementById('playerIframe');
+  iframe.removeEventListener('load', onIframeLoad);
   iframe.src = '';
   iframe.style.transform = 'scale(1)';
   currentPlayer = null;
+  playerPosterData = null;
+  iframeLoadCount = 0;
 
   // Exit fullscreen if still in it
   if (document.fullscreenElement) {
@@ -570,22 +584,18 @@ window.addEventListener('popstate', (e) => {
   if (currentScreen === 'player') {
     e.preventDefault();
     if (isPlayerFullscreen || document.fullscreenElement) {
-      // First back press: just exit fullscreen, stay on player screen
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
       isPlayerFullscreen = false;
       try { screen.orientation.unlock(); } catch {}
-      // Push state again so next back press can close the player
       history.pushState({ screen: 'player' }, '', '');
     } else {
-      // Second back press: close the player
       exitPlayer();
     }
   }
 });
 
-// Push initial state
 history.replaceState({ screen: 'home' }, '', '');
 
 // ── PINCH-TO-STRETCH ──
@@ -594,23 +604,28 @@ function initPinchToStretch() {
   if (pinchInitialized) return;
   pinchInitialized = true;
 
-  const container = document.getElementById('playerContainer');
+  const overlay = document.getElementById('touchOverlay');
   const iframe = document.getElementById('playerIframe');
   let initialDistance = 0;
   let currentScale = 1;
   let startScale = 1;
+  let isPinching = false;
+  let tapTimeout = null;
 
-  container.addEventListener('touchstart', (e) => {
+  overlay.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       e.preventDefault();
+      e.stopPropagation();
+      isPinching = true;
       initialDistance = getDistance(e.touches[0], e.touches[1]);
       startScale = currentScale;
     }
   }, { passive: false });
 
-  container.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
+  overlay.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && isPinching) {
       e.preventDefault();
+      e.stopPropagation();
       const dist = getDistance(e.touches[0], e.touches[1]);
       const scaleChange = dist / initialDistance;
       currentScale = Math.min(Math.max(startScale * scaleChange, 1), 3);
@@ -618,27 +633,44 @@ function initPinchToStretch() {
     }
   }, { passive: false });
 
-  container.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
+  overlay.addEventListener('touchend', (e) => {
+    if (isPinching) {
+      isPinching = false;
       if (currentScale < 1.1) {
         currentScale = 1;
         iframe.style.transform = 'scale(1)';
       }
+      return;
     }
-  });
 
-  // Double-tap to toggle stretch
-  let lastTap = 0;
-  container.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0) {
+    // Forward single taps to iframe by briefly hiding overlay
+    if (e.touches.length === 0 && !isPinching) {
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+
+      // Double-tap detection for zoom toggle
       const now = Date.now();
-      if (now - lastTap < 300) {
+      if (tapTimeout) {
+        clearTimeout(tapTimeout);
+        tapTimeout = null;
+        // Double tap — toggle stretch
         currentScale = currentScale > 1 ? 1 : 1.5;
         iframe.style.transform = `scale(${currentScale})`;
         iframe.style.transition = 'transform 0.3s ease';
         setTimeout(() => { iframe.style.transition = ''; }, 300);
+        return;
       }
-      lastTap = now;
+
+      tapTimeout = setTimeout(() => {
+        tapTimeout = null;
+        // Single tap — forward to iframe
+        overlay.style.pointerEvents = 'none';
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el) el.click();
+        requestAnimationFrame(() => {
+          overlay.style.pointerEvents = '';
+        });
+      }, 250);
     }
   });
 }
